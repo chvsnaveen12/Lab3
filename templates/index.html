@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    <style>
+        @import url(https://fonts.googleapis.com/css?family=Roboto);
+
+        input::-webkit-inner-spin-button,
+        input::-webkit-inner-spin-button {
+            -webkit-appearence: none;
+        }
+
+        input[type=number] {
+            -moz-appearance: textfield;
+        }
+
+        body {
+            font-family: Roboto, sans-serif;
+            background-color: #252A34;
+        }
+
+        h1 {
+            padding-left: 3%;
+            font-size: xx-large;
+            color: #FFF;
+        }
+
+        #chart {
+            width: 100%;
+            margin: 35px auto;
+        }
+
+        .controlsNumber {
+            outline: none;
+            color: #d0d0d0;
+            border: 1px solid #EA5455;
+            padding: 0px;
+            margin: 0px;
+            background-color: #1B262C;
+            width: 50%;
+        }
+
+        .controlsText {
+            color: #d0d0d0;
+            margin: 0px;
+            padding-right: 1%;
+        }
+
+        .flex-container {
+            display: flex;
+            flex-direction: row;
+            flex-wrap: nowrap;
+            justify-content: space-evenly;
+        }
+
+        .controls {
+            /* background-color: aqua; */
+            margin: 0%;
+            margin-top: 4%;
+            padding: 0%;
+        }
+
+        .apexcharts-gridline {
+            stroke-width: 0.025%;
+        }
+    </style>
+    <title>Realtime Data</title>
+
+</head>
+
+<body onload="updateParam()">
+
+    <h1>
+        EEE F411, Lab 3
+    </h1>
+
+    <div id="graph">
+    </div>
+
+    <div class="flex-container">
+        <div class="controls">
+            <div class="flex-container">
+                <p class="controlsText">
+                    Lower bound
+                </p>
+                <input type="text" id="graphLowerB" class="controlsNumber" onkeypress="return onlyNumberKey(event)"
+                    onkeyup="this.value = minmax(this.value, 0, 60), updateParam();" placeholder="0" value="0" />
+            </div>
+        </div>
+        <div class="controls">
+            <div class="flex-container">
+                <p class="controlsText">
+                    Upper bound
+                </p>
+                <input type="text" id="graphUpperB" class="controlsNumber" onkeypress="return onlyNumberKey(event)"
+                    onkeyup="this.value = minmax(this.value, 0, 60); updateParam();" placeholder="60" value="60" />
+            </div>
+        </div>
+        <div class="controls">
+            <div class="flex-container">
+                <p class="controlsText">
+                    Node ID
+                </p>
+                <input type="text" id="nodeId" class="controlsNumber" onkeypress="return onlyNumberKey(event)"
+                    onkeyup="this.value = minmax(this.value, 0, 40); updateParam();" placeholder="0" value="0" />
+            </div>
+        </div>
+    </div>
+
+    <div class="flex-container">
+        <div class="controls">
+            <div class="flex-container">
+                <p id="nodeNum" class="controlsText" style="padding-right: 0px; margin-right: 10px; width: 13em;">
+                    Active nodes: 0
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        var data = [];
+        var avg = [];
+
+        var nodeId = 0;
+        var close = document.getElementsByClassName("closebtn");
+        var serverIp = "0.0.0.0";
+        var serverPort = "8080";
+
+        var options = {
+            chart: {
+                height: "130%",
+                width: "100%",
+                type: 'line',
+                animations: {
+                    enabled: true,
+                    easing: 'linear',
+                    dynamicAnimation: {
+                        speed: 1000
+                    }
+                },
+                toolbar: {
+                    show: false
+                },
+                zoom: {
+                    enabled: false
+                }
+            },
+            dataLabels: {
+                enabled: false,
+            },
+            series: [{
+                name: 'Average of all sensors',
+                data: []
+            }, {
+                name: 'Your sensor',
+                data: []
+            }
+            ],
+            stroke: {
+                curve: 'smooth'
+            },
+            title: {
+                text: '',
+                align: 'left'
+            },
+            markers: {
+                size: 0
+            },
+            xaxis: {
+                type: 'datetime',
+                range: 10000,
+                labels: {
+                    format: 'mm/ss',
+                    show: false,
+                    showAlways: false,
+                    showForNullSeries: false
+                },
+            },
+            yaxis: {
+                labels: {
+                    showForNullSeries: false,
+                    style: {
+                        colors: "#ffffff",
+                        fontSize: "100%"
+                    },
+                    formatter: (value) => {
+                        return value.toFixed(0)
+                    }
+                },
+                min: 0,
+                max: 50,
+            },
+            colors: ['#fccf31', '#16ead9'],
+            legend: {
+                show: true,
+                fontSize: "15%",
+                labels: {
+                    colors: "#FFF",
+                },
+                onItemClick: {
+                    toggleDataSeries: false
+                },
+                onItemHover: {
+                    highlightDataSeries: false
+                }
+            },
+            tooltip: {
+                enabled: false
+            },
+            grid: {
+                borderColor: '#fff',
+                opacity: 0.1
+            },
+        };
+
+        var graph = new ApexCharts(
+            document.querySelector("#graph"),
+            options
+        );
+
+        graph.render();
+
+        // Get the data from the API every second
+        setInterval(() => {
+            console.log('http://' + serverIp + ':' + serverPort + '/app/' + nodeId.toString());
+            fetch('http://' + serverIp + ':' + serverPort + '/app/' + nodeId.toString())
+                .then(response => response.json())
+                .then(data => {
+                    let time = new Date().getTime();
+                    graph.appendData([{
+                        data: [{
+                            x: time,
+                            y: parseInt(data.avg)
+                        }]
+                    }, {
+                        data: [{
+                            x: time,
+                            y: parseInt(data.sensor)
+                        }]
+                    }])
+                    console.log(data);
+                    document.getElementById("nodeNum").innerHTML = "Active nodes: " + data.active;
+                })
+                .catch(error => console.error('Error:', error));
+        }, 1000);
+
+        function onlyNumberKey(evt) {
+            // Only ASCII character in that range allowed
+            var ASCIICode = (evt.which) ? evt.which : evt.keyCode
+            if (ASCIICode > 31 && (ASCIICode < 48 || ASCIICode > 57))
+                return false;
+            return true;
+        }
+
+        function minmax(value, min, max) {
+            if (parseInt(value) < min)
+                return min;
+            else if (parseInt(value) > max)
+                return max;
+            else return value;
+        }
+
+        function updateParam() {
+            console.log("bruh")
+            var lower = document.getElementById("graphLowerB").value;
+            var upper = document.getElementById("graphUpperB").value;
+            var node = document.getElementById("nodeId").value;
+
+            console.log(lower, "  ", upper, "  ", node)
+
+            if (lower == "" || upper == "" || node == "" || parseInt(upper) < parseInt(lower)) {
+                return;
+            }
+
+            serverPort = window.location.port;
+            serverIp = window.location.host.replace(':', '').replace(serverPort, '');
+
+            nodeId = parseInt(node);
+            graph.updateOptions({
+                yaxis: {
+                    labels: {
+                        showForNullSeries: false,
+                        style: {
+                            colors: "#ffffff",
+                            fontSize: "100%"
+                        },
+                        formatter: (value) => {
+                            return value.toFixed(0)
+                        }
+                    },
+                    min: parseInt(lower),
+                    max: parseInt(upper),
+                }
+            })
+
+        }
+    </script>
+
+</body>
+</html>
